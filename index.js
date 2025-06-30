@@ -123,7 +123,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
       // 1. Ask service
       await ticketChannel.send(
-        `<@${interaction.user.id}> Welcome! Would you like to order through **DoorDash**, **Grubhub/JustEat/Lieferando**, **UberEats**, or **Roblox**? For any other services, you must open a support ticket.`
+        `<@${interaction.user.id}> Welcome! Would you like to order from **DoorDash**, **Grubhub/JustEat/Lieferando**, **UberEats**, or **Roblox**? For any other services, you must open a support ticket.`
       );
       const collectedService = await ticketChannel.awaitMessages({
         filter,
