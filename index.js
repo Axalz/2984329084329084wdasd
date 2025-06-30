@@ -30,7 +30,7 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
   ],
-  partials: [Partials.Channel],
+  partials: [Partials.Channel, Partials.Message], // Added Partials.Message here
 });
 
 // When bot is ready
@@ -120,107 +120,104 @@ client.on(Events.InteractionCreate, async (interaction) => {
         ephemeral: true,
       });
 
-      // Start conversation and ask for delivery service
+      // Start conversation and ask for delivery service using awaitMessages
       await ticketChannel.send(
-        `<@${interaction.user.id}> Welcome! Would you like to order from **DoorDash**, **Grubhub/JustEat/Lieferando**, **UberEats**, or **Roblox**? For any other services, you must open a support ticket.`,
+        `<@${interaction.user.id}> Welcome! Would you like to order through **DoorDash**, **Grubhub/JustEat/Lieferando**, **UberEats**, or **Roblox**? For any other services, you must open a support ticket.`,
       );
 
       const filter = (m) => m.author.id === interaction.user.id;
 
-      const serviceCollector = ticketChannel.createMessageCollector({
+      // Await the service message
+      const collectedService = await ticketChannel.awaitMessages({
         filter,
         max: 1,
         time: 60000,
+        errors: ["time"],
+      }).catch(() => null);
+
+      if (!collectedService) {
+        await ticketChannel.send(
+          "You did not specify a service in time. Please try again later or open a new ticket.",
+        );
+        return;
+      }
+
+      const serviceMsg = collectedService.first();
+      const service = serviceMsg.content.trim();
+      const allowedServices = [
+        "doordash",
+        "grubhub",
+        "ubereats",
+        "roblox",
+        "lieferando",
+        "amazon",
+        "justeat",
+        "just eat",
+      ];
+
+      if (!allowedServices.includes(service.toLowerCase())) {
+        await ticketChannel.send(
+          "Please open a support ticket for other services. Closing this ticket.",
+        );
+
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+
+        await ticketChannel.delete();
+        return;
+      }
+
+      // Food collector (event-based)
+      const foodCollector = ticketChannel.createMessageCollector({
+        filter,
+        max: 1,
+        time: 120000,
       });
 
-      serviceCollector.on("collect", async (serviceMsg) => {
+      foodCollector.on("collect", async (foodMsg) => {
         try {
-          const service = serviceMsg.content.trim();
-          const allowedServices = [
-            "doordash",
-            "grubhub",
-            "ubereats",
-            "roblox",
-            "lieferando",
-            "amazon",
-            "justeat",
-            "just eat",
-          ];
+          const foodItems = foodMsg.content.trim();
 
-          if (!allowedServices.includes(service.toLowerCase())) {
-            await ticketChannel.send(
-              "Please open a support ticket for other services. Closing this ticket.",
-            );
+          await ticketChannel.send(
+            `Thanks! You want: **${foodItems}**. Which Payment method would you like to use? We support Paypal (F&F), Bitcoin, XMR (Monero), Litecoin and other Cryptocurrencies on request (no shitcoins nigga)`,
+          );
 
-            await new Promise((resolve) => setTimeout(resolve, 3000));
-
-            await ticketChannel.delete();
-            return;
-          }
-
-          const foodCollector = ticketChannel.createMessageCollector({
+          const paymentCollector = ticketChannel.createMessageCollector({
             filter,
             max: 1,
-            time: 120000,
+            time: 60000,
           });
 
-          foodCollector.on("collect", async (foodMsg) => {
+          paymentCollector.on("collect", async (paymentMsg) => {
             try {
-              const foodItems = foodMsg.content.trim();
+              const paymentMethod = paymentMsg.content.trim();
 
-              await ticketChannel.send(
-                `Thanks! You want: **${foodItems}**. Which Payment method would you like to use? We support Paypal (F&F), Bitcoin, XMR (Monero), Litecoin and other Cryptocurrencies on request (no shitcoins nigga)`,
-              );
-
-              const paymentCollector = ticketChannel.createMessageCollector({
-                filter,
-                max: 1,
-                time: 60000,
-              });
-
-              paymentCollector.on("collect", async (paymentMsg) => {
-                try {
-                  const paymentMethod = paymentMsg.content.trim();
-
-                  await ticketChannel.send(`Order summary:
+              await ticketChannel.send(`Order summary:
 - Service: **${service}**
 - Food items: **${foodItems}**
 - Payment method: **${paymentMethod}**
 
 A staff member will be with you shortly to assist you further. Thanks for your order! <@&1388206255855632476>`);
-                } catch (err) {
-                  console.error("Error during payment collection:", err);
-                }
-              });
-
-              paymentCollector.on("end", async (collected) => {
-                if (collected.size === 0) {
-                  await ticketChannel.send(
-                    "You did not specify a payment method in time. Please try again later or open a new ticket.",
-                  );
-                }
-              });
             } catch (err) {
-              console.error("Error during food collection:", err);
+              console.error("Error during payment collection:", err);
             }
           });
 
-          foodCollector.on("end", async (collected) => {
+          paymentCollector.on("end", async (collected) => {
             if (collected.size === 0) {
               await ticketChannel.send(
-                "You did not specify any food items in time. Please try again later or open a new ticket.",
+                "You did not specify a payment method in time. Please try again later or open a new ticket.",
               );
             }
           });
         } catch (err) {
-          console.error("Error during service collection:", err);
+          console.error("Error during food collection:", err);
         }
       });
 
-      serviceCollector.on("end", async (collected) => {
+      foodCollector.on("end", async (collected) => {
         if (collected.size === 0) {
           await ticketChannel.send(
-            "You did not specify a service in time. Please try again later or open a new ticket.",
+            "You did not specify any food items in time. Please try again later or open a new ticket.",
           );
         }
       });
