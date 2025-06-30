@@ -30,14 +30,12 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
   ],
-  partials: [Partials.Channel, Partials.Message], // Added Partials.Message here
+  partials: [Partials.Channel, Partials.Message], // Added Partials.Message
 });
 
-// When bot is ready
 client.once("ready", async () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
 
-  // Send the embed with button once per server
   client.guilds.cache.forEach(async (guild) => {
     const channel = guild.channels.cache.find(
       (ch) =>
@@ -61,7 +59,6 @@ client.once("ready", async () => {
         .setCustomId("open_ticket"),
     );
 
-    // Prevent duplicate message by checking last 10 messages
     const messages = await channel.messages.fetch({ limit: 10 });
     const alreadyPosted = messages.some(
       (m) => m.author.id === client.user.id && m.components.length > 0,
@@ -72,7 +69,6 @@ client.once("ready", async () => {
   });
 });
 
-// Handle button interaction
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isButton()) return;
 
@@ -89,7 +85,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
         return;
       }
 
-      // Create private ticket channel
       const ticketChannel = await interaction.guild.channels.create({
         name: `ticket-${interaction.user.id}`,
         type: ChannelType.GuildText,
@@ -120,14 +115,16 @@ client.on(Events.InteractionCreate, async (interaction) => {
         ephemeral: true,
       });
 
-      // Start conversation and ask for delivery service using awaitMessages
+      // Wait before sending prompt to sync permissions properly
+      await new Promise((r) => setTimeout(r, 1500));
+
       await ticketChannel.send(
         `<@${interaction.user.id}> Welcome! Would you like to order through **DoorDash**, **Grubhub/JustEat/Lieferando**, **UberEats**, or **Roblox**? For any other services, you must open a support ticket.`,
       );
 
-      const filter = (m) => m.author.id === interaction.user.id;
+      const filter = (m) =>
+        m.author.id === interaction.user.id && m.channel.id === ticketChannel.id;
 
-      // Await the service message
       const collectedService = await ticketChannel.awaitMessages({
         filter,
         max: 1,
@@ -143,6 +140,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
 
       const serviceMsg = collectedService.first();
+      console.log("Service collected:", serviceMsg.content); // Debug log
+
       const service = serviceMsg.content.trim();
       const allowedServices = [
         "doordash",
@@ -166,7 +165,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         return;
       }
 
-      // Food collector (event-based)
+      // Food collector event-based
       const foodCollector = ticketChannel.createMessageCollector({
         filter,
         max: 1,
@@ -231,20 +230,16 @@ A staff member will be with you shortly to assist you further. Thanks for your o
   }
 });
 
-// ** New part: Handle !close command **
 client.on("messageCreate", async (message) => {
-  // Ignore bots and DMs
   if (message.author.bot || !message.guild) return;
 
   if (message.content.toLowerCase() === "!close") {
-    // Check admin permission
     if (
       !message.member.permissions.has(PermissionsBitField.Flags.Administrator)
     ) {
       return message.reply("❌ You need admin permissions to close tickets.");
     }
 
-    // Only allow closing channels named like ticket-USERID
     if (!message.channel.name.startsWith("ticket-")) {
       return message.reply(
         "❌ This command can only be used inside a ticket channel.",
@@ -261,5 +256,4 @@ client.on("messageCreate", async (message) => {
   }
 });
 
-// Log in
 client.login(TOKEN);
