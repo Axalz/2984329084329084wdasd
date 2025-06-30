@@ -161,7 +161,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
 
       // 2. Ask food items
-      await ticketChannel.send("Please specify the food items you want to order:");
+      await ticketChannel.send("Please specify the items you want to order:");
       const collectedFood = await ticketChannel.awaitMessages({
         filter,
         max: 1,
